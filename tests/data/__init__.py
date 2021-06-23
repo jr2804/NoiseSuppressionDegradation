@@ -21,15 +21,17 @@ class TestFilesETSI(Enum):
 
 def downloadFile(fileURL, destination, proxy=None):
     s = requests.Session()
-    if proxy:
-        s.proxies = {"https": proxy}
+    try:
+        if proxy:
+            s.proxies = {"https": proxy}
 
-    r = s.get(fileURL)
-    with open(destination, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=1024):
-            if chunk:  # filter out keep-alive new chunks
-                f.write(chunk)
-
+        r = s.get(fileURL)
+        with open(destination, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+    finally:
+        s.close()
 
 def downloadETSITestFile(file: TestFilesETSI, forceOverwrite=False, proxy=None):
     file = TestFilesETSI(file)
