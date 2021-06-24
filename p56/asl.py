@@ -8,7 +8,8 @@ Created on Jun 23 2021 13:04
 import numpy as np
 from scipy.signal import lfilter
 
-from p56.prefilter import P56Prefilter, getFilter, applyFilters
+from p56.prefilter import P56Prefilter, PrefilterP56, getFilter, applyFilters
+
 
 class ASLException(Exception):
     pass
@@ -141,7 +142,7 @@ def calculateP56ASL(x, fs, nbits=16, M = 15.9, H = 0.2, T = 0.03):
 
     return asl_dB, activity
 
-def calculateP56ASLEx(x, fs, preFilter: P56Prefilter='NoFilter', minAmplitude=0.1, maxAmplitude=1.0, **kwargs):
+def calculateP56ASLEx(x, fs, preFilter: PrefilterP56='NoFilter', minAmplitude=0.1, maxAmplitude=1.0, **kwargs):
     # call calculateP56ASL() with additional pre-filter and range check of signal:
     x = np.array(x)
     maxAbsValue = np.abs(x).max()

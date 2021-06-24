@@ -5,6 +5,7 @@ Created on Jun 23 2021 18:06
 @author: Jan.Reimes
 """
 
+from typing import Union
 from enum import Enum
 from scipy import signal
 
@@ -17,6 +18,8 @@ class P56Prefilter(Enum):
     SWB = 'SWB'
     FB = 'FB'
 
+PrefilterP56 = Union[P56Prefilter, str]
+
 def applyFilters(x, coeffs):
     # apply b-a-coeffs sequentially (filter cascade)
     y = x.copy()
@@ -26,7 +29,7 @@ def applyFilters(x, coeffs):
 
     return y
 
-def getFilter(fltType: P56Prefilter, fs):
+def getFilter(fltType: PrefilterP56, fs):
     # IIR filter design of pre-filters of P.56
     fltType = P56Prefilter(fltType)
     filters = []
