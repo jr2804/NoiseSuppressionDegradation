@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 import pandas
 
-from tests import resultsP863File
+from tests import resultsP863File, resultIdxRange
 from p863 import runPOLQA
 
 class P863CalcTestCase(unittest.TestCase):
@@ -16,7 +16,7 @@ class P863CalcTestCase(unittest.TestCase):
         nbrRanges = 8
 
         # init storage and new column
-        df = pandas.read_excel(resultsP863File, index_col=0)
+        df = pandas.read_excel(resultsP863File, index_col=resultIdxRange)
         if not ('MOS-LQO' in df.columns):
             df['MOS-LQO'] = pandas.NA
 
