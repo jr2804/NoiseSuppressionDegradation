@@ -4,3 +4,4 @@ numpy
 scipy
 librosa
 soundfile
+numba

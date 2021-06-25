@@ -6,6 +6,7 @@ Created on Jun 23 2021 13:04
 """
 
 import numpy as np
+from numba import jit
 from scipy.signal import lfilter
 
 from p56.prefilter import P56Prefilter, PrefilterP56, getFilter, applyFilters
@@ -13,6 +14,51 @@ from p56.prefilter import P56Prefilter, PrefilterP56, getFilter, applyFilters
 
 class ASLException(Exception):
     pass
+
+@jit(nopython=True)
+def __bin_interp(upcount, lwcount, upthr, lwthr, Margin, tol):
+    tol = np.abs(tol)
+
+    # check if extreme counts are not already the true active value
+    iterno = 1
+    if abs(upcount - upthr - Margin) < tol:
+        asl_ms_log = upcount
+        cc = upthr
+        return asl_ms_log, cc
+    elif abs(lwcount - lwthr - Margin) < tol:
+        asl_ms_log = lwcount
+        cc = lwthr
+        return asl_ms_log, cc
+    else:
+        # Initialize first middle for given (initial) bounds
+        midcount = (upcount + lwcount) / 2.0
+        midthr = (upthr + lwthr) / 2.0
+        # Repeats loop until `diff' falls inside the tolerance (-tol<=diff<=tol)
+        while 1:
+            diff = midcount - midthr - Margin
+            if np.abs(diff) <= tol:
+                break
+            # if tolerance is not met up to 20 iteractions, then relax the tolerance by 10%
+            iterno = iterno + 1
+            if iterno > 20:
+                tol = tol * 1.1
+            if diff > tol:  # then new bounds are ...
+                midcount = (upcount + midcount) / 2.0
+                # upper and middle activities
+                midthr = (upthr + midthr) / 2.0
+                # ... and thresholds
+            elif diff < -tol:  # then new bounds are ...
+                midcount = (midcount + lwcount) / 2.0
+                # middle and lower activities
+                midthr = (midthr + lwthr) / 2.0
+                # ... and thresholds
+
+        # Since the tolerance has been satisfied, midcount is selected
+        # as the interpolated value with a tol [dB] tolerance.
+        asl_ms_log = midcount
+        cc = midthr
+
+        return asl_ms_log, cc
 
 def calculateP56ASL(x, fs, nbits=16, M = 15.9, H = 0.2, T = 0.03):
     '''
@@ -32,50 +78,6 @@ def calculateP56ASL(x, fs, nbits=16, M = 15.9, H = 0.2, T = 0.03):
     Python implementation from MATLAB: Rui Cheng
     '''
 
-    def bin_interp(upcount, lwcount, upthr, lwthr, Margin, tol):
-        tol = np.abs(tol)
-
-        # check if extreme counts are not already the true active value
-        iterno = 1
-        if abs(upcount - upthr - Margin) < tol:
-            asl_ms_log = upcount
-            cc = upthr
-            return asl_ms_log, cc
-        elif abs(lwcount - lwthr - Margin) < tol:
-            asl_ms_log = lwcount
-            cc = lwthr
-            return asl_ms_log, cc
-        else:
-            # Initialize first middle for given (initial) bounds
-            midcount = (upcount + lwcount) / 2.0
-            midthr = (upthr + lwthr) / 2.0
-            # Repeats loop until `diff' falls inside the tolerance (-tol<=diff<=tol)
-            while 1:
-                diff = midcount - midthr - Margin
-                if abs(diff) <= tol:
-                    break
-                # if tolerance is not met up to 20 iteractions, then relax the tolerance by 10%
-                iterno = iterno + 1
-                if iterno > 20:
-                    tol = tol * 1.1
-                if diff > tol:  # then new bounds are ...
-                    midcount = (upcount + midcount) / 2.0
-                    # upper and middle activities
-                    midthr = (upthr + midthr) / 2.0
-                    # ... and thresholds
-                elif diff < -tol:  # then new bounds are ...
-                    midcount = (midcount + lwcount) / 2.0
-                    # middle and lower activities
-                    midthr = (midthr + lwthr) / 2.0
-                    # ... and thresholds
-
-            # Since the tolerance has been satisfied, midcount is selected
-            # as the interpolated value with a tol [dB] tolerance.
-            asl_ms_log = midcount
-            cc = midthr
-
-            return asl_ms_log, cc
-
     thres_no = nbits - 1  # number of thresholds, for 16 bit, it's 15
     eps = 2.2204e-16
 
@@ -86,24 +88,30 @@ def calculateP56ASL(x, fs, nbits=16, M = 15.9, H = 0.2, T = 0.03):
     a = np.zeros(thres_no, dtype=int) # activity counter for each level threshold
     hang = I + np.zeros(thres_no, dtype=int)  # % hangover counter for each level threshold
 
-    sq = sum(pow(x, 2))  # long-term level square energy of x
+    sq = np.sum(np.power(x, 2))  # long-term level square energy of x
     x_len = len(x)  # length of x
 
     # use a 2nd order IIR filter to detect the envelope q
-    x_abs = abs(x)
+    x_abs = np.abs(x)
     p = lfilter([1 - g], [1, -g], x_abs)
     q = lfilter([1 - g], [1, -g], p)
 
-    for k in range(x_len):
-        for j in range(thres_no):
-            if q[k] >= c[j]:
-                a[j] = a[j] + 1
-                hang[j] = 0
-            elif hang[j] < I:
-                a[j] = a[j] + 1
-                hang[j] = hang[j] + 1
-            else:
-                break
+    @jit(nopython=True)
+    def __getActivity(q, c, a, hang, thres_no, x_len):
+        for k in range(x_len):
+            for j in range(thres_no):
+                if q[k] >= c[j]:
+                    a[j] = a[j] + 1
+                    hang[j] = 0
+                elif hang[j] < I:
+                    a[j] = a[j] + 1
+                    hang[j] = hang[j] + 1
+                else:
+                    break
+
+        return a, hang
+
+    a, hang = __getActivity(q, c, a, hang, thres_no, x_len)
 
     # default result values
     activity = 0
@@ -116,29 +124,31 @@ def calculateP56ASL(x, fs, nbits=16, M = 15.9, H = 0.2, T = 0.03):
 
     CdB1 = 20 * np.log10(c[0] + eps)
     if AdB1 - CdB1 < M:
-        raise ASLException(f'No frame above margin M={M:.1f}dB detected')
+        msg = 'No frame above margin M=%.1f dB detected' % (float(M))
+        print(msg)
+        #raise ASLException(msg)
+    else:
+        AdB = np.zeros(thres_no) # [0 for i in range(thres_no)]
+        CdB = np.zeros(thres_no) # [0 for i in range(thres_no)]
+        Delta = np.zeros(thres_no) # [0 for i in range(thres_no)]
+        AdB[0] = AdB1
+        CdB[0] = CdB1
+        Delta[0] = AdB1 - CdB1
 
-    AdB = np.zeros(thres_no) # [0 for i in range(thres_no)]
-    CdB = np.zeros(thres_no) # [0 for i in range(thres_no)]
-    Delta = np.zeros(thres_no) # [0 for i in range(thres_no)]
-    AdB[0] = AdB1
-    CdB[0] = CdB1
-    Delta[0] = AdB1 - CdB1
+        for j in range(1, thres_no):
+            AdB[j] = 10 * np.log10(sq / (a[j] + eps) + eps)
+            CdB[j] = 20 * np.log10(c[j] + eps)
 
-    for j in range(1, thres_no):
-        AdB[j] = 10 * np.log10(sq / (a[j] + eps) + eps)
-        CdB[j] = 20 * np.log10(c[j] + eps)
-
-    for j in range(1, thres_no):
-        if a[j] != 0:
-            Delta[j] = AdB[j] - CdB[j]
-            if Delta[j] <= M:  # M = 15.9
-                # interpolate to find the asl
-                asl_dB, cl0 = bin_interp(AdB[j], AdB[j - 1], CdB[j], CdB[j - 1], M, 0.5)
-                asl_lin = np.power(10, asl_dB / 10)
-                activity = (sq / x_len) / asl_lin
-                #c0 = pow(10, cl0 / 20)
-                break
+        for j in range(1, thres_no):
+            if a[j] != 0:
+                Delta[j] = AdB[j] - CdB[j]
+                if Delta[j] <= M:  # M = 15.9
+                    # interpolate to find the asl
+                    asl_dB, cl0 = __bin_interp(AdB[j], AdB[j - 1], CdB[j], CdB[j - 1], M, 0.5)
+                    asl_lin = np.power(10, asl_dB / 10)
+                    activity = (sq / x_len) / asl_lin
+                    #c0 = pow(10, cl0 / 20)
+                    break
 
     return asl_dB, activity
 
