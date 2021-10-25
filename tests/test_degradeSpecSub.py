@@ -56,7 +56,7 @@ class SpecSubDegradeTestCase(unittest.TestCase):
                                         sf.write(outputFile, signal, fs, subtype='PCM_16')
 
                                     # store information for P.863 calculation in other unit test
-                                    df.loc[str(outputFile), :] = [tstFile.value, snr, osf, tc, pow_exp]
+                                    df.loc[str(outputFile), :] = [tstFile.value, snr, osf, tc, pow_exp, -1.0]
                                     df.to_excel(resultsP863File)
 
         # final check: remove all rows where the file does not exist

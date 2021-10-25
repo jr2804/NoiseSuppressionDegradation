@@ -23,7 +23,7 @@ class P863CalcTestCase(unittest.TestCase):
         # calculate POLQA scores
         for i, (key, row) in enumerate(df.iterrows()):
             print("[%d/%d] %s" % (i+1, df.shape[0], Path(key).name))
-            if pandas.isna(df.loc[key, 'MOS-LQO']):
+            if pandas.isna(df.loc[key, 'MOS-LQO']) or (df.loc[key, 'MOS-LQO'] < 1.0):
                 dfPerFile = None
                 for i in range(nbrRanges):
                     res, _ = runPOLQA(key, key, chNbrRef=2, chNbrDeg=1,
