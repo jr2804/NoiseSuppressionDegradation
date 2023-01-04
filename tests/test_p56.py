@@ -11,6 +11,8 @@ FS = 48000
 x = np.random.randn(20*FS)
 
 class P56TestCase(unittest.TestCase):
+    showPlots: bool = True
+
     def test_p56_asl(self):
         # run P.56 ASL calculation on all three test files, should result in ~-26 dBov for each file
         for tstFile in TestFilesETSI:
@@ -37,9 +39,9 @@ class P56TestCase(unittest.TestCase):
         H = 10 * np.log10(np.maximum(np.abs(Y) / np.abs(X), 1e-12))
         return freq, H
 
-    def _plotTransferFunction(self, freq, H):
+    def _plotTransferFunction(self, freq, H, title: str):
         plt.semilogx(freq, H)
-        plt.title('Butterworth filter frequency response')
+        plt.title(f'Butterworth filter frequency response ({title})')
         plt.xlabel('Frequency [Hz]')
         plt.ylabel('Amplitude [dB]')
         plt.grid(which='both', axis='both')
@@ -62,7 +64,8 @@ class P56TestCase(unittest.TestCase):
             idxF = np.argmin(np.abs(freq-f))
             self.assertGreater(H[idxF], limit)
 
-        #self._plotTransferFunction(freq, H)
+        if self.showPlots:
+            self._plotTransferFunction(freq, H, 'NB')
 
     def test_p56_prefilter_swb(self):
         coeffs = getFilter('SWB', fs=48000)
@@ -79,7 +82,8 @@ class P56TestCase(unittest.TestCase):
             idxF = np.argmin(np.abs(freq - f))
             self.assertGreater(H[idxF], limit)
 
-        #self._plotTransferFunction(freq, H)
+        if self.showPlots:
+            self._plotTransferFunction(freq, H, 'SWB')
 
     def test_p56_prefilter_fb(self):
         coeffs = getFilter('FB', fs=FS)
@@ -97,7 +101,8 @@ class P56TestCase(unittest.TestCase):
             idxF = np.argmin(np.abs(freq - f))
             self.assertGreater(H[idxF], limit)
 
-        #self._plotTransferFunction(freq, H)
+        if self.showPlots:
+            self._plotTransferFunction(freq, H, 'FB')
 
 if __name__ == '__main__':
     unittest.main()
