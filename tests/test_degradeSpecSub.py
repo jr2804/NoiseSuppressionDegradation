@@ -29,7 +29,7 @@ class SpecSubDegradeTestCase(unittest.TestCase):
         # run for all test signals
         for tstFile in TestFilesETSI:
             with self.subTest(testFile=tstFile.value):
-                self.testFile = downloadETSITestFile(tstFile, proxy="https://127.0.0.1:3128")
+                self.testFile = downloadETSITestFile(tstFile, proxy="http://127.0.0.1:3128")
 
                 # load signal
                 fs = librosa.get_samplerate(self.testFile)

@@ -23,7 +23,7 @@ def downloadFile(fileURL, destination, proxy=None):
     s = requests.Session()
     try:
         if proxy:
-            s.proxies = {"https": proxy}
+            s.proxies = {"https": proxy, "http": proxy}
 
         r = s.get(fileURL)
         with open(destination, 'wb') as f:

@@ -58,7 +58,7 @@ def applySpecSub(signal, fs, speechLevel, snr, **kwargs):
     fsBlock = fs / ((1 - overlap) * n_fft)
 
     # transform input
-    freq = librosa.fft_frequencies(fs, n_fft)
+    freq = librosa.fft_frequencies(sr=fs, n_fft=n_fft)
     stft_args = dict(n_fft=n_fft, win_length=n_fft, hop_length=hop_length, window=window, center=True)
     S = librosa.stft(signal, **stft_args)
 
