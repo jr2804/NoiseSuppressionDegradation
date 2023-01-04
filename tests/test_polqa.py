@@ -40,6 +40,16 @@ class P863CalcTestCase(unittest.TestCase):
                     df.loc[key, 'MOS-LQO'] = dfPerFile['MOS-LQO'].mean()
                     df.to_excel(resultsP863File)
 
+    def test_analyse_P863_results(self):
+        if resultsP863File.is_file():
+            # load
+            df = pandas.read_excel(resultsP863File, index_col=resultIdxRange)
+            df = df.dropna()
+
+            # average across samples and languages
+            df = df.groupby(['SNR','OSF','TimeConst','PowExp']).mean()
+
+            df
 
 if __name__ == '__main__':
     unittest.main()
