@@ -20,7 +20,7 @@ def ltasP50(freq, freq_lower=None, freq_upper=None, fmin=100, fmax=8000, targetL
 
     # Spectral density, ITU-T P.50, clause 4.1, equation 4-1
     Sd = -376.44 + 465.439* np.log10(freq) - 157.745 * np.log10(freq)**2 + 16.7124 * np.log10(freq)**3
-    Sd -= 94.0 # it's SPL?!
+    Sd -= 94.0 # formula is defined for SPL?!
 
     # extrapolate for f < 100 and f > 8kHz (P.50 is not defined there)
     idxMin = np.argmin(np.abs(freq-fmin))
@@ -39,9 +39,10 @@ def ltasP50(freq, freq_lower=None, freq_upper=None, fmin=100, fmax=8000, targetL
 
 def applySpecSub(signal, fs, speechLevel, snr, **kwargs):
     # parse arguments
-    overlap = kwargs.get('overlap', 0.50)
-    n_fft = kwargs.get('n_fft', 1024)
+    overlap = kwargs.get('overlap', 0.75)
+    n_fft = kwargs.get('n_fft', 8192)
     window = kwargs.get('window', 'hann')
+
     pow_exp = kwargs.get('pow_exp', 2.0)
     osf = kwargs.get('osf', 0.99) # 1.0: highest musical tones, less noise; 0.0: less distortions, more noise
     tcNoise = kwargs.get('tcNoise', 0.100)
