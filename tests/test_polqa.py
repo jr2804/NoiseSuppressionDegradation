@@ -3,16 +3,41 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
+from concurrent.futures import ProcessPoolExecutor
 
 from tests import resultsP863File, resultIdxRange
 from p863 import runPOLQA
 
 class P863CalcTestCase(unittest.TestCase):
-    def test_calcP863(self):
+    @staticmethod
+    def _calculate_polqa(wavDeg: Path, wavRef: Path,
+                         startTime: float, duration: float, nbrRanges: int,
+                         chNbrRef=2, chNbrDeg=1,) -> "DataFrame":
+
+        # calculation/average of multiple ranges
+        dfPerFile = None
+        try:
+            for i in range(nbrRanges):
+                res, _ = runPOLQA(wavDeg, wavRef, chNbrRef=chNbrRef, chNbrDeg=chNbrDeg,
+                                  timeRangeStart=startTime + i * duration,
+                                  timeRangeDuration=duration)
+                res.name = i + 1
+                if res.shape[0] > 0:
+                    res = pandas.DataFrame(res).T
+                    if dfPerFile is None:
+                        dfPerFile = res
+                    else:
+                        dfPerFile = dfPerFile.combine_first(res)
+        except:
+            dfPerFile = None
+        finally:
+            return dfPerFile
+
+    def test_calcP863(self, maxWorkers: int = 4):
         if not resultsP863File.is_file():
             self.assertFalse(True, 'Cannot find %s - please run test for generation of files first' % (resultsP863File.name))
 
-        # analysis parameters for the ETSI test files:
+        # analysis parameters for the ETSI test files (TODO: test files from other sources)
         duration = 8.0
         startTime = 16.0
         nbrRanges = 8
@@ -23,24 +48,28 @@ class P863CalcTestCase(unittest.TestCase):
             df['MOS-LQO'] = pandas.NA
 
         # calculate POLQA scores
-        for i, (key, row) in enumerate(df.iterrows()):
-            print("[%d/%d] %s" % (i+1, df.shape[0], Path(key).name))
-            if pandas.isna(df.loc[key, 'MOS-LQO']) or (df.loc[key, 'MOS-LQO'] < 1.0):
-                dfPerFile = None
-                for i in range(nbrRanges):
-                    res, _ = runPOLQA(key, key, chNbrRef=2, chNbrDeg=1,
-                                   timeRangeStart=startTime + i*duration,
-                                   timeRangeDuration=duration)
-                    if res.shape[0] > 0:
-                        if dfPerFile is None:
-                            dfPerFile = pandas.DataFrame(columns=res.index)
+        with ProcessPoolExecutor(max_workers=maxWorkers) as executor:
+            # start tasks
+            results = dict()
+            for i, (key, row) in enumerate(df.iterrows()):
+                if pandas.isna(df.loc[key, 'MOS-LQO']) or (df.loc[key, 'MOS-LQO'] < 1.0):
+                    results[key] = executor.submit(self._calculate_polqa, key, key, startTime, duration, nbrRanges)
 
-                        dfPerFile.loc[i, :] = res
+            # wait for tasks
+            print(f"Waiting for {len(results)}/{df.shape[0]} items to complete...")
+            for i, (key, futureResult) in enumerate(results.items()):
+                print("[%d/%d] %s" % (i + 1, len(results), Path(key).name))
+                e = futureResult.exception()
+                if e is None:
+                    dfPerFile = futureResult.result()
 
-                # store in output
-                if not dfPerFile is None:
-                    df.loc[key, 'MOS-LQO'] = dfPerFile['MOS-LQO'].mean()
-                    df.to_excel(resultsP863File)
+                    # store in output
+                    if not dfPerFile is None:
+                        df.loc[key, 'MOS-LQO'] = dfPerFile['MOS-LQO'].mean()
+                        df.to_excel(resultsP863File)
+                else:
+                    df.loc[key, 'MOS-LQO'] = -1.0
+                    print(str(e))
 
     def test_analyse_P863_results(self):
         # try to automatically select the four best noise reduction parameters that generate:

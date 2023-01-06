@@ -40,7 +40,7 @@ def _createTmpCopy(wavFile, chNbr, timeRangeStart=0.0, timeRangeDuration=-1.0):
     idxEnd = -1
     if timeRangeDuration > 0:
         idxEnd = idxStart + int(fs * timeRangeDuration)
-    sf.write(tmpFile, s[idxStart:idxEnd,chNbr-1], fs)
+    sf.write(tmpFile, s[idxStart:idxEnd,chNbr-1], fs, format='WAV', subtype='PCM_16')
     return tmpFile
 
 def runPOLQA(wavFileDeg, wavFileRef, version=POLQAVersion.V3_0, highAccuracyMode=True,
@@ -70,7 +70,7 @@ def runPOLQA(wavFileDeg, wavFileRef, version=POLQAVersion.V3_0, highAccuracyMode
     # parse results and warnings
     if res.returncode == 0:
         for resTitle in ['MOS-LQO', 'AVG  Delay', 'SNR Degraded', 'SNR Reference']:
-            m = re.search(b"%s: (\d+(?:\.\d+)?)" % (resTitle.encode('ascii')), res.stdout)
+            m = re.search(b"%s: ([+-]?\d+(?:\.\d+)?)" % (resTitle.encode('ascii')), res.stdout)
             if m:
                 results[resTitle] = float(m.group(1).strip())
 
