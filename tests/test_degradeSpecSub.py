@@ -36,7 +36,7 @@ class SpecSubDegradeTestCase(unittest.TestCase):
                 s, _ = librosa.load(self.testFile, fs)
 
                 # iterate over internal pseudo-noise-reduction parameters:
-                for snr in [10, 0, -10, -20, -30]: # SNR between speech and speech-shaped noise
+                for snr in [10, 5, 0, -5, -10, -20, -30]: # SNR between speech and speech-shaped noise
                     for osf in [0.5, 1.0, 1.5, 2.0]: # over-subtraction factor
                         for tc in [0.005, 0.035, 0.125, 0.250]: # time constant for smoothing
                             for pow_exp in [0.5, 1.0, np.sqrt(2), 2.0]: # power exponent for Wiener gain
@@ -57,9 +57,15 @@ class SpecSubDegradeTestCase(unittest.TestCase):
 
                                     # store information for P.863 calculation in other unit test
                                     df.loc[str(outputFile), :] = [tstFile.value, snr, osf, tc, pow_exp, -1.0]
-                                    df.to_excel(resultsP863File)
 
         # final check: remove all rows where the file does not exist
+        remove = []
+        for key, row in df.iterrows():
+            if not Path(key).is_file():
+                remove.append(key)
 
+        df = df.drop(labels=remove)
+
+        df.to_excel(resultsP863File)
 if __name__ == '__main__':
     unittest.main()

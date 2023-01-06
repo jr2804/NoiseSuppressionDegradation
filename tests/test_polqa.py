@@ -53,6 +53,7 @@ class P863CalcTestCase(unittest.TestCase):
             # load
             df = pandas.read_excel(resultsP863File, index_col=resultIdxRange)
             df = df.dropna()
+            df = df[df['MOS-LQO'] >= 1.0]
 
             # average across samples and languages
             df = df.groupby(['SNR','OSF','TimeConst','PowExp']).agg({'MOS-LQO': ['mean', 'min', 'max', 'std']})
@@ -83,13 +84,13 @@ class P863CalcTestCase(unittest.TestCase):
                 upper = edges[i+1]
                 centre = 0.5 * (upper + lower)
                 dfBin = df[(df[('MOS-LQO', 'mean')] >= lower) & (df[('MOS-LQO', 'mean')] < upper)]
+                if dfBin.shape[0] > 0:
+                    # apply difference to centre
+                    dfBin['score'] *= np.abs(df[('MOS-LQO', 'mean')] - centre)
 
-                # apply difference to centre
-                dfBin['score'] *= np.abs(df[('MOS-LQO', 'mean')] - centre)
-
-                # sort and pick first
-                dfBin = dfBin.sort_values('score', ascending=True)
-                print(dfBin.iloc[0]['MOS-LQO'])
+                    # sort and pick first
+                    dfBin = dfBin.sort_values('score', ascending=True)
+                    print(dfBin.iloc[0]['MOS-LQO'])
 
             plt.show()
 
