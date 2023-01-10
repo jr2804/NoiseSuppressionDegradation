@@ -49,11 +49,20 @@ class P863CalcTestCase(unittest.TestCase):
 
         # calculate POLQA scores
         with ProcessPoolExecutor(max_workers=maxWorkers) as executor:
-            # start tasks
-            results = dict()
+
+            # collect tasks and shuffle
+            tasks = pandas.DataFrame(columns=['wavDeg', 'wavRef', 'startTime', 'duration', 'nbrRanges'])
             for i, (key, row) in enumerate(df.iterrows()):
                 if pandas.isna(df.loc[key, 'MOS-LQO']) or (df.loc[key, 'MOS-LQO'] < 1.0):
-                    results[key] = executor.submit(self._calculate_polqa, key, key, startTime, duration, nbrRanges)
+                    tasks.loc[key] = (key, key, startTime, duration, nbrRanges)
+
+            # shuffle
+            tasks = tasks.sample(frac=1.0)
+
+            # start tasks
+            results = dict()
+            for key, row in tasks.iterrows():
+                results[key] = executor.submit(self._calculate_polqa, **row)
 
             # wait for tasks
             print(f"Waiting for {len(results)}/{df.shape[0]} items to complete...")
@@ -76,8 +85,6 @@ class P863CalcTestCase(unittest.TestCase):
         # - equidistant MOS-LQO for anchoring (~1.0 / ~2.0 / ~3.0 / ~4.0 - 5.0/max is given by direct reference)
         # - most consistent results across language/source files
 
-        TargetMOS = [1.0, 2.0, 3.0, 4.0]
-
         if resultsP863File.is_file():
             # load
             df = pandas.read_excel(resultsP863File, index_col=resultIdxRange)
@@ -85,10 +92,17 @@ class P863CalcTestCase(unittest.TestCase):
             df = df[df['MOS-LQO'] >= 1.0]
 
             # average across samples and languages
-            df = df.groupby(['SNR','OSF','TimeConst','PowExp']).agg({'MOS-LQO': ['mean', 'min', 'max', 'std']})
+            df = df.groupby(['NFFT', 'Hop', 'SNR','OSF','TimeConst','PowExp']).agg({'MOS-LQO': ['mean', 'min', 'max', 'std']})
 
-            # add delta column
+            # add delta column (max-min)
             df[('MOS-LQO', 'delta')] = df[('MOS-LQO', 'max')] - df[('MOS-LQO', 'min')]
+
+            # evaluation criteria:
+            # - delta and std (=multiplication) to be minimized -> score
+            # - as close as possible to centre of bin
+            df['score'] = df[('MOS-LQO', 'delta')] * df[('MOS-LQO', 'std')]
+            # apply difference to centre
+            df['score'] *= np.abs(df[('MOS-LQO', 'mean')] - df[('MOS-LQO', 'mean')].apply(round))
 
             # make histogram
             edges = np.arange(5) + 0.5 # "target MOS" in
@@ -101,21 +115,14 @@ class P863CalcTestCase(unittest.TestCase):
             ax.grid(True)
             fig.tight_layout()
 
-            # evaluation criteria:
-            # - delta and std (=multiplication) to be minimized -> score
-            # - as close as possible to centre of bin
-            df['score'] = df[('MOS-LQO', 'delta')] * df[('MOS-LQO', 'std')]
 
             # iterate over edges
             for i in range(len(edges)-1):
                 # filter items
                 lower = edges[i]
                 upper = edges[i+1]
-                centre = 0.5 * (upper + lower)
                 dfBin = df[(df[('MOS-LQO', 'mean')] >= lower) & (df[('MOS-LQO', 'mean')] < upper)]
                 if dfBin.shape[0] > 0:
-                    # apply difference to centre
-                    dfBin['score'] *= np.abs(df[('MOS-LQO', 'mean')] - centre)
 
                     # sort and pick first
                     dfBin = dfBin.sort_values('score', ascending=True)

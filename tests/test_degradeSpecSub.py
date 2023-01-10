@@ -44,10 +44,13 @@ class SpecSubDegradeTestCase(unittest.TestCase):
     @staticmethod
     def _process_sequences(testFiles: List[Path], outputPath: Path, fs: int=FS, maxWorkers: int = os.cpu_count()-1) -> pandas.DataFrame:
         # storage for generated files
+        df = pandas.DataFrame(columns=resultColumns + resultIndices).set_index(resultIndices)
         if resultsP863File.is_file():
-            df = pandas.read_excel(resultsP863File, index_col=resultIdxRange)
+            dfOrig = pandas.read_excel(resultsP863File, index_col=resultIdxRange)
         else:
-            df = pandas.DataFrame(columns=resultColumns+resultIndices).set_index(resultIndices)
+            dfOrig = None
+
+
 
         # generate all samples via multiprocessing
         with ProcessPoolExecutor(max_workers=maxWorkers) as executor:
@@ -60,23 +63,32 @@ class SpecSubDegradeTestCase(unittest.TestCase):
                     s = resample(s, fs1, fs)
 
                 # iterate over internal pseudo-noise-reduction parameters:
-                for snr in [10, 5, 2.5, 0, -2.5, -5, -10, -20, -30]:  # SNR between speech and speech-shaped noise
-                    for osf in [0.0, 0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.90, 1.0]:  # over-subtraction factor
-                        for tc in [0.005, 0.035, 0.125, 0.250]:  # time constant for smoothing
-                            for pow_exp in [0.5, 1.0, np.sqrt(2), 2.0]:  # power exponent for Wiener gain
+                for nfft, hop in [(8192, 2048), (8192, 128), (8192, 64)]:
+                    #for snr in [10, 5, 2.5, 0, -2.5, -5, -10, -20, -30]:  # SNR between speech and speech-shaped noise
+                    for snr in [10, 5, 0, -5, -10, -20, -30]:  # SNR between speech and speech-shaped noise
+                        #for osf in [0.0, 0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.90, 1.0, 1.5, 2.0]:  # over-subtraction factor
+                        for osf in [0.0, 0.1, 0.25, 0.5, 0.75, 0.90, 1.0, 1.5, 2.0]:  # over-subtraction factor
+                            #for tc in [0.005, 0.035, 0.125, 0.250]:  # time constant for smoothing
+                            for tc in [0.035, 0.125, 0.250]:  # time constant for smoothing
+                                #for pow_exp in [0.5, 1.0, np.sqrt(2), 2.0]:  # power exponent for Wiener gain
+                                for pow_exp in [1.0, 2.0]:  # power exponent for Wiener gain
 
-                                # run with given settings
-                                outputFile = outputPath / Path('processed_%s_snr=%d_osf=%.2f_tc=%d_pe=%.2f.flac' % (
-                                    testFile.stem, snr, osf, tc * 1000, pow_exp))
+                                    # run with given settings
+                                    outputFile = outputPath / Path('processed_%s_FFT=%d_hop=%d_snr=%d_osf=%.2f_tc=%d_pe=%.2f.flac' % (
+                                        testFile.stem, nfft, hop, snr, osf, tc * 1000, pow_exp))
 
-                                if not outputFile.is_file():
-                                    results[outputFile] = executor.submit(SpecSubDegradeTestCase._process_sequence,
-                                                                          s, fs, outputFile, snr, osf, tc, pow_exp)
+                                    if not outputFile.is_file():
+                                        results[outputFile] = executor.submit(SpecSubDegradeTestCase._process_sequence,
+                                                                              s, fs, outputFile, snr, osf, tc, pow_exp)
 
-                                # store information for P.863 calculation in other unit test
-                                key = str(outputFile)
-                                if key not in df.index:
-                                    df.loc[key, :] = [testFile.stem, snr, osf, tc, pow_exp, -1.0]
+                                    # store information for P.863 calculation in other unit test
+                                    key = str(outputFile)
+                                    if key not in df.index:
+                                        mos = -1.0
+                                        if (dfOrig is not None) and (key in dfOrig.index):
+                                            mos = dfOrig.loc[key, 'MOS-LQO']
+
+                                        df.loc[key, :] = [testFile.stem, nfft, hop, snr, osf, tc, pow_exp, mos]
 
             # wait for tasks
             nbrItems = df.shape[0]
