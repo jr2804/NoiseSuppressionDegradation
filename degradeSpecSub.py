@@ -26,7 +26,7 @@ def applySpecSub(signal, fs, speechLevel, snr, **kwargs):
     # check arguments
     floorSubtractFactor = np.maximum(floorSubtractFactor, 0.0)
     overlap = np.maximum(np.minimum(overlap, 0.99), 0.0)
-    osf = np.maximum(np.minimum(osf, 1.0), 0.0)
+    osf = np.maximum(np.minimum(osf, 2.0), 0.0)
 
     # derive parameters from arguments
     hop_length = int(n_fft * (1-overlap))
